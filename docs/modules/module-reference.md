@@ -12,7 +12,8 @@ Quick reference for every backend package: purpose, main endpoints, and test cov
 | `payroll` | Salary calculation, payroll runs, payslips | `/api/payroll` | ❌ |
 | `inventory` | Stock items, movements, dashboard | `/api/inventory` | ❌ |
 | `product` | Products, BOM | `/api/products` | ❌ |
-| `production` | Workflows, orders, execution, quality, kanban, notifications | `/api/production` (phase 1 + 2) | ✅ (most-covered module) |
+| `production` | Workflows, orders, execution, quality, kanban, notifications, vendor outsourcing, per-step deadlines, audit trail, employee self-service | `/api/production` (phase 1 + 2), `/api/production/orders/{id}/audit-log`, `/api/production/my-assignments` | ✅ (most-covered module) |
+| `vendor` | Third-party vendor (outsourcing) CRUD, dashboard, insights — mirrors `supplier` | `/api/vendors` | ✅ |
 | `supplier` | Supplier CRUD, insights, bulk import | `/api/suppliers` | ❌ |
 | `customer` | Customer CRUD, insights, bulk import | `/api/customers` | ❌ |
 | `billing` | Bills, GST, OCR import, e-way integration hooks | `/api/billing` | ❌ |
@@ -40,7 +41,8 @@ Quick reference for every backend package: purpose, main endpoints, and test cov
 | `features/payroll` | Payroll runs, generate/approve/pay, payslips, insights | `payroll` | Working; financial actions untested |
 | `features/inventory` | Stock CRUD, movements, dashboard, bulk import/export | `inventory` | Working; "delete" is actually disable |
 | `features/products` | Product + BOM CRUD | `product` | Working |
-| `features/production` | Orders, workflows, BOM, workstations, assignments, kanban, analytics | `production` | Most complete feature; very large page |
+| `features/production` | Orders, workflows, BOM, workstations, assignments (internal worker or vendor), Jira-style drag-drop kanban (fixed/step-view toggle, no horizontal scroll), inline partial-completion, audit trail tab, employee "My Orders" view, analytics | `production` | Most complete feature; very large page, now split with `KanbanBoard.tsx`, `PartialCompletionForm.tsx`, `MyAssignmentsPage.tsx` |
+| `features/vendors` | Vendor CRUD, dashboard — mirrors `features/suppliers` | `vendor` | Working |
 | `features/suppliers` | Supplier CRUD, dashboard, AI insights | `supplier` | Working |
 | `features/customers` | Customer CRUD, dashboard, insights | `customer` | Working |
 | `features/billing` | Invoices, e-way bill actions, GST, OCR import | `billing`, `ewaybill` | Working; some endpoints may be dead/unwired |

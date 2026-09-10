@@ -24,6 +24,7 @@ code** — only documentation, kept in sync with the real repos as the system ev
   - `partner-onboarding.md`
   - `whitelabel-branding-resolution.md`
   - `production-order-lifecycle.md`
+  - `production-kanban-vendor-overhaul.md`
   - `configurable-pricing.md`
   - `feature-gating.md`
 - [`docs/modules/`](docs/modules/) — per-domain-module reference (endpoints, status, known gaps)

@@ -14,6 +14,14 @@ register, not a one-time report._
   partner onboarding + auto-provisioning, feature gating, sandbox trial
   signup — all wired end-to-end frontend ↔ backend and validated
   (tests/build/lint passing at time of implementation).
+- Production tracking overhaul: third-party vendor outsourcing (new `Vendor`
+  entity, mirrors Supplier), per-step deadlines with once-only breach-email
+  notification, a full immutable per-order audit trail
+  (`production_order_audit_log`, separate from the notification outbox),
+  Jira-style drag-and-drop kanban (`@dnd-kit`, fixed/workflow-step view
+  toggle, no horizontal scroll), inline partial-completion on kanban cards,
+  and an org-configurable employee self-service "My Orders" view. See
+  [`production-kanban-vendor-overhaul.md`](../sequence-diagrams/production-kanban-vendor-overhaul.md).
 
 ## 🟡 Half-cooked / rough edges
 
@@ -46,8 +54,16 @@ register, not a one-time report._
 5. **`.env.example` (frontend) is incomplete** — missing
    `NEXT_PUBLIC_API_BASE_URL` (a hard dependency) and the four
    `NEXT_PUBLIC_FACTORY1_*_DOWNLOAD_URL` variables actually referenced in code.
-6. **No audit logging** for sensitive admin actions (partner creation, org
-   approval/termination, pricing changes, feature-gate overrides).
+6. **No audit logging** for sensitive admin actions outside production
+   (partner creation, org approval/termination, pricing changes, feature-gate
+   overrides) — production now has a full audit trail
+   (`production_order_audit_log`); this pattern hasn't been extended to other
+   modules yet.
+7. **No manager/reporting-line concept** exists anywhere in `User`/`Employee`
+   — surfaced concretely by the production deadline-breach feature, which can
+   only notify the order's designated `responsibleUserId`, not an overdue
+   assignee's manager. Worth deciding whether to introduce a reporting
+   hierarchy if per-manager escalation becomes a real need.
 
 ## 💡 Candidate next features / improvements
 
@@ -55,8 +71,9 @@ register, not a one-time report._
   identity model that doesn't rely on an unconstrained `organization_id`.
 - Build a real plan-change/upgrade **workflow** (state machine + SaaS-owner
   review queue) instead of a one-way email notification.
-- Add rate limiting + structured audit logging on auth, public signup/sandbox,
-  and SaaS-admin mutation endpoints.
+- Add rate limiting + structured audit logging (following the new production
+  audit-log pattern) on auth, public signup/sandbox, and SaaS-admin mutation
+  endpoints.
 - Stand up baseline test scaffolding on the frontend (even smoke/integration
   tests for the highest-risk pages: Accounting, Billing, Production) before
   the codebase grows further.

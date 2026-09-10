@@ -85,6 +85,40 @@ erDiagram
     PRODUCTION_ORDER_STEP ||--o| PRODUCTION_ORDER_STEP_SNAPSHOT : "snapshots"
     PRODUCTION_ORDER }o--|| PRODUCT : "produces"
     PRODUCTION_ORDER ||--o{ PRODUCTION_INVENTORY_POSTING : "posts stock via"
+    PRODUCTION_ORDER }o--|| USER : "has responsible_user_id"
+    PRODUCTION_ORDER_STEP ||--o{ PRODUCTION_ASSIGNMENT : "assigned via"
+    PRODUCTION_ASSIGNMENT }o--o| USER : "assignee_user_id (XOR vendor_id)"
+    PRODUCTION_ASSIGNMENT }o--o| VENDOR : "vendor_id (XOR assignee_user_id)"
+    PRODUCTION_ORDER ||--o{ PRODUCTION_ORDER_AUDIT_LOG : "logs every lifecycle event"
+
+    PRODUCTION_ASSIGNMENT {
+        uuid id PK
+        uuid assignee_user_id FK "nullable"
+        uuid vendor_id FK "nullable"
+        timestamp deadline
+        timestamp deadline_breach_notified_at "set once, prevents repeat emails"
+    }
+
+    VENDOR {
+        uuid id PK
+        uuid organization_id FK
+        string name
+        string contact_email
+        string contact_phone
+        string service_type "free text, e.g. Embroidery, Cutting"
+        boolean active
+    }
+
+    PRODUCTION_ORDER_AUDIT_LOG {
+        uuid id PK
+        uuid production_order_id FK
+        uuid order_step_snapshot_id FK "nullable"
+        uuid assignment_id FK "nullable"
+        enum event_type "CREATED|ASSIGNED|REASSIGNED|VENDOR_HANDOFF|STEP_STARTED|PARTIAL_COMPLETE|STEP_COMPLETED|DEADLINE_BREACHED|..."
+        uuid actor_user_id "nullable - null for system-triggered events"
+        timestamp occurred_at
+        text details "JSON/text metadata, event-specific"
+    }
 
     SAAS_PLAN ||--o{ SAAS_ADDON : "offered alongside"
     ORGANIZATION }o--|| SAAS_PLAN : "subscribes to"
@@ -105,4 +139,19 @@ erDiagram
 - **Flyway** governs every schema change; migrations are strictly append-only
   (never renumber/reuse a version — this caused a real deployment collision
   once, fixed by renaming `V63` → `V64`). As of writing, the schema is at
-  **V67** (sandbox trial orgs).
+  **V68** (production vendor outsourcing, deadlines, and audit trail).
+- **`production_assignments` vendor-or-user XOR**: `assignee_user_id` and
+  `vendor_id` are both nullable, enforced mutually exclusive by a DB check
+  constraint (`ck_production_assignment_target`) plus service-level
+  validation — an assignment targets exactly one of an internal `User` or a
+  `Vendor`, never both/neither.
+- **`production_order_audit_log` is deliberately a separate table from
+  `production_events`** — `production_events` is a retryable notification
+  *outbox* (delivery status/retries/idempotency for emails), not an immutable
+  business audit trail; conflating the two would have made audit history
+  dependent on notification delivery state.
+- **Deadline breach scheduler bug found & fixed during implementation**: the
+  original scheduler called its own `@Transactional` method via `forEach`,
+  which bypasses the Spring AOP proxy and silently drops the transaction. Fixed
+  by extracting a separate `ProductionDeadlineBreachNotifier` bean so
+  self-invocation isn't possible.

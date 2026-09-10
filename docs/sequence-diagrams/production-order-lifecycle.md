@@ -4,6 +4,10 @@ The most mature domain module. Covers workflow definition, order execution
 step-by-step, and the automatic stock posting that happens when a final step's
 output is accepted.
 
+> See also [`production-kanban-vendor-overhaul.md`](production-kanban-vendor-overhaul.md)
+> for the vendor outsourcing, per-step deadlines, audit trail, drag-and-drop
+> kanban board, and employee self-service layer built on top of this lifecycle.
+
 ```mermaid
 sequenceDiagram
     actor M as Management/Admin

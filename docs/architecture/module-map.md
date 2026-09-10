@@ -14,7 +14,7 @@ API base paths connecting them.
 | Payroll | `payroll` | `features/payroll` | `/api/payroll/*` |
 | Inventory | `inventory` | `features/inventory` | `/api/inventory/*` |
 | Products / BOM | `product` | `features/products` | `/api/products/*` |
-| Production tracking | `production` | `features/production` | `/api/production/*` (phase 1 + phase 2) |
+| Production tracking (kanban, vendors, deadlines, audit trail) | `production` (+ new `vendor` package) | `features/production`, `features/vendors` | `/api/production/*` (phase 1 + phase 2), `/api/production/orders/{id}/audit-log`, `/api/production/my-assignments`, `/api/vendors/*` |
 | Suppliers | `supplier` | `features/suppliers` | `/api/suppliers/*` |
 | Customers | `customer` | `features/customers` | `/api/customers/*` |
 | Billing / invoicing / OCR | `billing` | `features/billing` | `/api/billing/*` |
