@@ -1,14 +1,14 @@
 # Per-Module Reference
 
 Quick reference for every backend package and frontend feature directory, refreshed
-from the current local source checkouts:
+from the current source:
 
-- backend: `/Users/yashb319/IdeaProjects/factory1-backend` (`main`)
-- frontend: `/Users/yashb319/IdeaProjects/factory1-frontend` (`main`)
+- backend: `factory1-backend` `main`
+- frontend: `factory1-frontend` `main` (through the payslip templates/sharing UI merge)
 
-The separate attendance-capture checkout named in earlier notes is not present
-locally, so this file documents only the public attendance-capture backend API
-and the management frontend currently available in the main frontend app.
+The separate attendance-capture repository is not available in the environment this
+was written from, so this file documents only the public attendance-capture backend
+API and the management frontend in the main frontend app.
 
 ## Backend packages
 
@@ -47,13 +47,14 @@ and the management frontend currently available in the main frontend app.
 | Feature dir | Purpose | Backend module it talks to | Notable status |
 |---|---|---|---|
 | `features/auth` | Login, signup, OTP, forgot-password, employee activation, partner-code path | `auth`, `organization`, `sandbox` | Working; no frontend tests |
-| `features/organization-settings` | Org settings, accounting toggles, PF/TDS toggles, employee production self-progress toggle, attendance capture key, plan/termination actions | `organization`, `payroll`, `production` | Working; payslip delivery/share settings are backend-only in current frontend main |
+| `features/organization-settings` | Org settings, accounting toggles, PF/TDS toggles, payslip delivery/share-link settings (email/SMS/WhatsApp, expiry days, max views, password required), employee production self-progress toggle, attendance capture key, plan/termination actions | `organization`, `payroll`, `payslip`, `production` | Working; hosts the payslip templates panel |
 | `features/organization`, `features/access`, `features/organization-features` | Organization profile/access and effective feature-gate surfaces | `organization`, `feature` | Working/admin-oriented |
 | `features/employees` | Employee CRUD/import/export, invitations, edit drawer, statutory profile form | `employee`, `employee/statutory` | Working; statutory form covers PAN/UAN/PF/tax-regime declaration data |
 | `features/attendance` | Attendance dashboard/register/manual/bulk entry, monthly report/export, QR/capture-key management hooks | `attendance` | Working; no offline queue/service worker found |
 | `features/leave` | Leave types/balances/requests/calendar/holidays | `leave` | Working; dense page |
-| `features/payroll` | Payroll runs, generate/approve/pay/delete, details dialog, statutory deduction breakdown, HTML payslip preview, JPG/ZIP export | `payroll` | Working; no PDF rendering library and no frontend automated tests |
-| `features/payslip` | Tenant payslip template/share/public viewer UI | `payslip` | **Not present in current frontend main**; backend APIs exist, but the local frontend checkout does not contain the admin panel, "Share securely" action, or `/payslip/[token]` viewer |
+| `features/payroll` | Payroll runs, generate/approve/pay/delete, details dialog, statutory deduction breakdown, HTML payslip preview, JPG/ZIP export, embedded "Share securely" panel | `payroll`, `payslip` | Working; no PDF rendering library and no frontend automated tests |
+| `features/payslip-templates` | Payslip template admin panel: list with status/version, create/edit form dialog, publish draft, start new draft version from a published template, set default, delete | `payslip` | Working; mounted inside the organization settings page |
+| `features/payslips` | Secure share-link creation panel ("Share securely", expiry/max-views/password options, one-time-reveal link + copy), public payslip viewer, payslip data/number-to-words helpers | `payslip` | Working; drives the unauthenticated `/payslip/[token]` route |
 | `features/inventory` | Stock CRUD, stock movements, dashboard, import/export, Tally-mode variant | `inventory` | Working; delete UI disables items rather than hard-deleting |
 | `features/products` | Product and product BOM management, production entry point, Tally-mode export view | `product` | Working |
 | `features/production` | Production orders first, workflows, BOM definitions, workstations, analytics, modal order execution/details, board/list Kanban, assignments, quality, materials, timeline, audit trail, employee My Assignments | `production`, `vendor`, `inventory`, `product`, `customer` | Mature; current UX uses modal-based record/advance flow rather than Start/Pause-centric controls |

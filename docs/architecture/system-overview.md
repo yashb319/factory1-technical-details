@@ -54,7 +54,7 @@ graph TB
 | Auth (JWT, OTP, roles) | `auth` module (backend), `features/auth` (frontend) |
 | Multi-tenant org lifecycle (signup → pending approval → active, or sandbox trial) | `organization` module (backend) |
 | India statutory payroll | `employee.statutory` + `payroll.statutory` (backend), employee statutory form + payroll payslip dialog (frontend) |
-| Payslip templates, snapshots, sharing, delivery | `payslip` module (backend); frontend main currently lacks the template/share/public viewer surfaces |
+| Payslips | `payslip` module (backend), `features/payslips` + `features/payslip-templates` + `/payslip/[token]` public route (frontend) |
 | Feature gating (per-plan, per-org overrides) | `feature` module (backend), `featureGating.ts` (frontend) |
 | SaaS pricing catalog (plans, add-ons, offers) | `saasadmin` module (backend), `public-pricing` + `saas-admin` (frontend) |
 | Partner/reseller program & white-labeling | `whitelabel` module (backend), `whitelabel` feature (frontend) |

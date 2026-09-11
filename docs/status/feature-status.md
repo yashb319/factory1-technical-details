@@ -1,7 +1,7 @@
 # Feature Status Snapshot
 
-_Snapshot from a full-system audit against the current local backend/frontend
-main checkouts. Update this file whenever a significant gap is closed or a new
+_Snapshot from a full-system audit against the current backend and frontend
+`main` branches. Update this file whenever a significant gap is closed or a new
 one is discovered — treat it as a living technical-debt register, not a one-time
 report._
 
@@ -34,18 +34,20 @@ report._
   PF/TDS fields and `payroll_statutory_calculations`, and the payroll payslip
   dialog shows the statutory breakdown. See
   [`payroll-statutory-and-payslip-sharing.md`](../sequence-diagrams/payroll-statutory-and-payslip-sharing.md).
-- Payslip backend is implemented end-to-end: template versions/defaults,
-  generated payslip snapshots, secure one-time-reveal share links, generic 404
-  public token access, email delivery, and no-op SMS/WhatsApp stubs behind org
-  toggles. See
+- Payslip module is implemented end-to-end across backend and frontend: versioned
+  draft/published templates with a default-template selector, generated payslip
+  snapshots, one-time-reveal secure share links, generic-404 public token access,
+  email delivery, and no-op SMS/WhatsApp stubs behind org toggles. The frontend
+  ships a payslip templates admin panel in organization settings, a "Share
+  securely" panel in the payroll payslip dialog, and an unauthenticated
+  `/payslip/[token]` viewer. See
   [`payroll-statutory-and-payslip-sharing.md`](../sequence-diagrams/payroll-statutory-and-payslip-sharing.md).
 
 ## 🟡 Half-cooked / rough edges
 
 | Area | Issue | Where |
 |---|---|---|
-| Payslip frontend layer | Backend has template/share/public-access APIs, but current frontend main does **not** contain a payslip-template admin panel, "Share securely" action, or unauthenticated `/payslip/[token]` viewer page | `factory1-frontend` main; backend `payslip/controller/*` |
-| Payslip rendering | Backend endpoints return structured JSON snapshots/templates, not PDF bytes; current frontend renders HTML and exports JPG/ZIP, with no PDF rendering library found | `payslip` backend DTOs/services; `features/payroll/utils/payrollPayslipDownload.utils.ts` |
+| Payslip rendering | Backend endpoints return structured JSON snapshots/templates, not PDF bytes; the frontend renders HTML and exports JPG/ZIP (`html2canvas` + `jszip`), with no PDF rendering library present | `payslip` backend DTOs/services; `features/payroll/utils/payrollPayslipDownload.utils.ts`, `features/payslips/components/PublicPayslipViewer.tsx` (uses browser print) |
 | Payslip SMS/WhatsApp delivery | Explicitly wired as logging no-op stubs until real providers are chosen; toggles exist server-side but no provider integration exists | `payslip/delivery/NoopSmsSender.java`, `NoopWhatsAppSender.java` |
 | Tally UI | Entire alternate UI mode incomplete, intentionally disabled by default | `NEXT_PUBLIC_ENABLE_TALLY_UI` (frontend), `features/*/tally/*` |
 | AI assistant | Multiple stub/null/heuristic branches; useful but experimental behavior | `ai/service/impl/AiActionServiceImpl.java`, `AiLocalAnswerServiceImpl.java`, `ListedCompanyService.java` |
@@ -55,13 +57,13 @@ report._
 | Plan-change request | Sends an email; no real approval/state-machine workflow | `organization/service/impl/OrganizationSettingsServiceImpl.java` (`plan-change-request`) |
 | Several service impls | `return null` edge branches worth auditing for silent failure modes | `accounting`, `billing`, `inventory`, `saasadmin`, `whitelabel` service impls |
 | Inventory "delete" | UI action actually disables the item, not a true delete — potentially confusing labeling | `features/inventory` `handleDelete` |
-| Attendance capture app | Referenced separate local checkout is not present in this environment; backend public capture APIs exist, but no offline-capable capture app could be audited locally | `/api/public/attendance-capture`, `/api/attendance/device-event` |
+| Attendance capture app | The separate attendance-capture repository was not available in this environment; backend public capture APIs exist, but the capture app itself could not be audited | `/api/public/attendance-capture`, `/api/attendance/device-event` |
 
 ## 🔴 Biggest gaps
 
-1. **Zero automated tests on the main frontend checkout** — no
-   `*.test.*` / `*.spec.*` files found. Highest risk given the large/dense
-   Accounting, Production, Billing, Payroll, and Leave pages.
+1. **Zero automated tests on the frontend** — no `*.test.*` / `*.spec.*` files
+   exist anywhere in the repo. Highest risk given the large/dense Accounting,
+   Production, Billing, Payroll, and Leave pages.
 2. **Uneven backend test coverage** — `billing`, `inventory`, `customer`,
    `supplier`, `product`, `ewaybill`, `importexport`, `notification`,
    `registration`, and most legacy employee CRUD paths have no direct tests.
@@ -70,7 +72,7 @@ report._
    broader direct coverage.
 3. **No offline support** for the attendance capture surface — relevant given
    factory-floor connectivity is often unreliable; no service worker,
-   IndexedDB queue, or retry/backoff logic found in the available checkout.
+   IndexedDB queue, or retry/backoff logic found in the sources reviewed.
 4. **No rate limiting or API versioning** across most APIs; payslip public
    token access and sandbox signup have bespoke rate limiters, but auth/public
    signup/SaaS-admin mutation paths do not share a platform-wide limiter.
@@ -78,8 +80,9 @@ report._
    intended for local/dev use, but should be cleaned up before wider team
    access.
 6. **`.env.example` (frontend) is incomplete** — missing
-   `NEXT_PUBLIC_API_BASE_URL` and the `NEXT_PUBLIC_FACTORY1_*_DOWNLOAD_URL`
-   variables referenced by native download links.
+   `NEXT_PUBLIC_API_BASE_URL` and the four
+   `NEXT_PUBLIC_FACTORY1_{ANDROID,IOS,MAC,WINDOWS}_DOWNLOAD_URL` variables that
+   are referenced in code.
 7. **No audit logging** for sensitive admin actions outside production and
    payslip token access — partner creation, org approval/termination, pricing
    changes, and feature-gate overrides do not yet have the production-style
@@ -90,10 +93,9 @@ report._
 
 ## 💡 Candidate next features / improvements
 
-- Add the missing frontend payslip-template admin, secure-share action, and
-  public token viewer to match the backend payslip APIs.
 - Add PDF rendering/generation for payslips if statutory/compliance workflows
-  require downloadable PDF documents rather than HTML/JPG snapshots.
+  require downloadable PDF documents rather than HTML/JPG snapshots and browser
+  print output.
 - Replace SMS/WhatsApp no-op payslip stubs with a real provider abstraction once
   a vendor is chosen.
 - Replace the whitelabel synthetic-org-id hack with a partner-user identity

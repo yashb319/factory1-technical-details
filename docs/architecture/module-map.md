@@ -13,7 +13,7 @@ API base paths connecting them.
 | Leave | `leave` | `features/leave` | `/api/leave/*` |
 | Payroll | `payroll` | `features/payroll` | `/api/payroll/*` |
 | Employee statutory profiles | `employee.statutory` + `payroll.statutory` | `features/employees` statutory form, `features/payroll` statutory breakdown | `/api/employees/{employeeId}/statutory-profile`, `/api/payroll/*` |
-| Payslips | `payslip` | Backend APIs only in current frontend main; payroll dialog still renders legacy HTML/JPG payslips from payroll data | `/api/organization/payslips`, `/api/organization/payslip-templates`, `/api/public/payslips/{token}` |
+| Payslips | `payslip` | `features/payslips`, `features/payslip-templates`, plus the payroll payslip dialog | `/api/organization/payslips`, `/api/organization/payslip-templates`, `/api/public/payslips/{token}` |
 | Inventory | `inventory` | `features/inventory` | `/api/inventory/*` |
 | Products / BOM | `product` | `features/products` | `/api/products/*` |
 | Production tracking (modal execution, kanban, vendors, deadlines, audit trail) | `production` (+ `vendor` package) | `features/production`, `features/vendors` | `/api/production/*`, `/api/production/orders/{id}/audit-log`, `/api/production/my-assignments`, `/api/vendors/*` |
@@ -43,14 +43,17 @@ API base paths connecting them.
 | Tally UI mode flag | `src/config/features.ts` (`NEXT_PUBLIC_ENABLE_TALLY_UI`, default `false`) |
 | App shell (nav, mode switch, feature gates) | `src/components/layout/AppShell.tsx` |
 
-## Current frontend/source caveat
+## Payslip surface map
 
-The current backend main branch contains the complete `payslip` API surface
-(templates, generation snapshots, secure token links, public access, delivery
-orchestration). The current frontend main branch contains payroll statutory
-settings/profile/breakdown UI, but no payslip-template admin panel, "Share
-securely" action, or unauthenticated `/payslip/[token]` viewer route. Treat
-those as a frontend gap until the source checkout includes them.
+The `payslip` backend package is matched by frontend surfaces on both the
+authenticated and public sides:
+
+| Surface | Frontend | Backend |
+|---|---|---|
+| Template administration | `features/payslip-templates` (`PayslipTemplatesPanel`, `PayslipTemplateFormDialog`), mounted in the organization settings page | `/api/organization/payslip-templates` (+ `/publish`, `/new-draft-version`, `/set-default`) |
+| Delivery & link policy | `features/organization-settings` (email/SMS/WhatsApp toggles, share-link enable, expiry days, max views, password required) | `/api/organization/settings` |
+| Secure sharing | `features/payslips` `ShareLinkPanel` ("Share securely"), rendered in the payroll payslip dialog | `POST /api/organization/payslips/{id}/share-link` |
+| Public viewing | `src/app/payslip/[token]/page.tsx` → `features/payslips` `PublicPayslipViewer` | `POST /api/public/payslips/{token}` |
 
 ## Security boundary summary (backend)
 

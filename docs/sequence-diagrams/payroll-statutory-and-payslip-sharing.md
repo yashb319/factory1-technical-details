@@ -1,12 +1,11 @@
 # Sequence: India Payroll Statutory Engine & Payslip Sharing
 
-This covers the current backend statutory payroll and payslip modules plus the
-frontend surfaces that exist in the current main checkout. PF/TDS is opt-in per
-organization and employee; payslip templates/share links are implemented in the
-backend, while the current frontend main branch exposes statutory settings,
-employee statutory profiles, and payroll payslip statutory breakdowns but does
-not yet include a payslip-template admin panel, "Share securely" action, or
-unauthenticated `/payslip/[token]` viewer route.
+This covers the current backend statutory payroll and payslip modules together
+with the frontend surfaces that drive them. PF/TDS is opt-in per organization and
+per employee. Payslip templates, secure share links, and public token viewing are
+shipped end to end: organization settings host the templates admin panel and
+delivery/link policy, the payroll payslip dialog exposes "Share securely", and
+`/payslip/[token]` renders the unauthenticated viewer.
 
 ## PF/TDS settings, employee profile, and payroll generation
 
@@ -74,6 +73,33 @@ The statutory audit row stores the numbers shown in the payslip breakdown:
 `annualTax`, `taxAlreadyDeducted`, `currentMonthTds`, `taxRuleId`, `pfRuleId`,
 `calculationVersion`, and `calculationSnapshotJson`.
 
+## Template administration (organization settings)
+
+```mermaid
+sequenceDiagram
+    actor Admin as Owner/Admin/Management
+    participant FE as PayslipTemplatesPanel +<br/>PayslipTemplateFormDialog
+    participant API as PayslipTemplateController
+    participant DB as PostgreSQL
+
+    Admin->>FE: Open Organization settings → Payslip Templates
+    FE->>API: GET /api/organization/payslip-templates
+    API-->>FE: templates with status + version
+    Note over FE: Empty state explains a system default<br/>is used until a template is created
+
+    Admin->>FE: Create or edit a draft (form-based template data)
+    FE->>API: POST or PUT /api/organization/payslip-templates
+    API->>DB: Persist DRAFT template version
+
+    Admin->>FE: Publish draft
+    FE->>API: POST /api/organization/payslip-templates/{id}/publish
+    API->>DB: status = PUBLISHED
+
+    Admin->>FE: Set default / start new draft version
+    FE->>API: POST .../set-default or .../new-draft-version
+    API->>DB: Enforce one default per org<br/>or clone published version into a new draft
+```
+
 ## Payslip generation, secure share link, and public access
 
 ```mermaid
@@ -125,6 +151,40 @@ sequenceDiagram
         PUB-->>Emp: 404 "This payslip link is invalid or has expired"
     end
 ```
+
+## Manual sharing and public viewing in the UI
+
+```mermaid
+sequenceDiagram
+    actor Fin as Finance/Admin
+    actor Emp as Employee/Public recipient
+    participant DLG as PayrollPayslipDialog +<br/>ShareLinkPanel
+    participant VIEW as /payslip/[token] →<br/>PublicPayslipViewer
+    participant API as Backend
+
+    Fin->>DLG: Open a payroll item's payslip
+    DLG->>API: GET /api/organization/payslips?employeeId=...
+    Fin->>DLG: "Share securely" → optionally customize<br/>expiry days, max views, password
+    DLG->>API: POST /api/organization/payslips/{id}/share-link
+    API-->>DLG: token URL + expiry + max views + password flag
+    DLG->>DLG: Show one-time-reveal warning and copy button<br/>("shown only once and cannot be retrieved again")
+
+    Fin->>Emp: Send the link out of band
+    Emp->>VIEW: Open /payslip/{token}
+    VIEW->>API: POST /api/public/payslips/{token}<br/>(auto-attempt without password)
+    alt access granted
+        API-->>VIEW: templateData + payslipData
+        VIEW->>VIEW: Render the template sections,<br/>net pay in words, browser Print action
+    else rejected
+        API-->>VIEW: generic 404
+        VIEW->>VIEW: Show one combined message covering<br/>invalid/expired/password-required, then<br/>offer a password field and retry
+    end
+```
+
+Because the backend deliberately returns the same generic 404 for every failure
+mode, the viewer cannot distinguish "wrong password" from "expired" or "unknown
+token" — so it intentionally shows a single combined message and offers a
+password retry rather than guessing the cause.
 
 ## Default template shape
 
