@@ -1,8 +1,8 @@
 # Sequence: Production Kanban, Vendor Outsourcing, Deadlines & Audit Trail
 
-Covers the production-tracking overhaul: vendor outsourcing, per-step deadlines
-with breach notification, the full audit trail, the Jira-style drag-and-drop
-kanban board, and the employee self-service "My Orders" view.
+Covers the production-tracking overhaul around the current modal execution
+lifecycle: vendor outsourcing, per-step deadlines with breach notification, the
+full audit trail, board/list Kanban, and employee self-service "My Orders" view.
 
 ## Order creation with a responsible person
 
@@ -101,19 +101,20 @@ sequenceDiagram
         FE->>FE: toast explanation, snap card back — no API call made
     end
 
-    U->>FE: click/expand a card to log partial output
-    FE->>FE: inline PartialCompletionForm (no page navigation)
-    FE->>API: PUT .../steps/{stepId}/complete {accepted, rejected}<br/>(same endpoint as the standard step-complete flow —<br/>partial recording is just a partial quantity on this call)
-    API-->>FE: updated card (badge/quantities refresh in place)
+    U->>FE: click a card to open order modal
+    FE->>FE: Execution tab shows PartialCompletionForm
+    FE->>API: POST .../steps/{stepId}/record<br/>{completedQuantity, rejectedQuantity}
+    API-->>FE: updated card/modal quantities<br/>(record only, does not advance)
+    U->>FE: click Move to next step / Complete step
+    FE->>API: POST .../steps/{stepId}/complete
+    API-->>FE: updated order if current step's<br/>completed + rejected total reaches planned quantity
 
     Note over FE: Cards lazily fetch their own assignment via the existing<br/>per-order assignments query (no bulk endpoint exists) to show<br/>overdue badges and vendor-vs-worker avatars.
 ```
 
-Layout note: columns render in a wrapping CSS grid with **internal
-per-column vertical scrolling** — the board never requires horizontal
-scrolling to see all columns, replacing the old `BoardView` which used a
-wide single-row layout (explicitly banned as a UX anti-pattern for this
-feature).
+Layout note: the current production orders tab supports **board/list** views,
+and board columns use a wrapping grid so the workspace can stay full-width
+without the old always-horizontal board layout.
 
 ## Audit trail view
 

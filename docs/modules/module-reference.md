@@ -1,58 +1,74 @@
-# Per-Module Reference (Backend)
+# Per-Module Reference
 
-Quick reference for every backend package: purpose, main endpoints, and test coverage at a glance. See `docs/status/feature-status.md` for build-completeness/gap details.
+Quick reference for every backend package and frontend feature directory, refreshed
+from the current source:
+
+- backend: `factory1-backend` `main`
+- frontend: `factory1-frontend` `main` (through the payslip templates/sharing UI merge)
+
+The separate attendance-capture repository is not available in the environment this
+was written from, so this file documents only the public attendance-capture backend
+API and the management frontend in the main frontend app.
+
+## Backend packages
 
 | Package | Purpose | Main API base | Has tests? |
 |---|---|---|---|
-| `auth` | JWT auth, OTP flows, user management, roles | `/api/auth`, `/api/users` | ✅ |
-| `organization` | Org lifecycle, settings, sandbox trial fields | `/api/organizations`, `/api/organization/settings` | ✅ |
-| `employee` | Employee CRUD, CSV import, invitations | `/api/employees` | ❌ |
-| `attendance` | Attendance records, device intake, reporting | `/api/attendance`, `/api/public/attendance-capture` | ✅ |
-| `leave` | Leave types/balances/requests/calendar/holidays | `/api/leave` | ✅ |
-| `payroll` | Salary calculation, payroll runs, payslips | `/api/payroll` | ❌ |
-| `inventory` | Stock items, movements, dashboard | `/api/inventory` | ❌ |
-| `product` | Products, BOM | `/api/products` | ❌ |
-| `production` | Workflows, orders, execution, quality, kanban, notifications, vendor outsourcing, per-step deadlines, audit trail, employee self-service | `/api/production` (phase 1 + 2), `/api/production/orders/{id}/audit-log`, `/api/production/my-assignments` | ✅ (most-covered module) |
-| `vendor` | Third-party vendor (outsourcing) CRUD, dashboard, insights — mirrors `supplier` | `/api/vendors` | ✅ |
-| `supplier` | Supplier CRUD, insights, bulk import | `/api/suppliers` | ❌ |
-| `customer` | Customer CRUD, insights, bulk import | `/api/customers` | ❌ |
-| `billing` | Bills, GST, OCR import, e-way integration hooks | `/api/billing` | ❌ |
-| `accounting` | Vouchers, ledgers, trial balance, P&L, balance sheet, GST | `/api/accounting` | ✅ |
-| `ewaybill` | E-way bill provider integration (disabled by default) | `/api/ewaybill` | ❌ |
-| `ai` | AI chat, business insights, benchmarks, action execution | `/api/ai` | ❌ |
-| `feature` | Feature catalog + per-org overrides + gate filter | `/api/saas-admin/features`, `/api/organizations/features` | ✅ |
-| `saasadmin` | Pricing catalog, offers, factories, marketing, public pricing | `/api/saas-admin/*`, `/api/public/plans` etc. | ✅ (pricing only) |
-| `whitelabel` | Partner program, branding, domain resolution | `/api/public/whitelabel`, `/api/whitelabel/branding/me`, `/api/partner/whitelabel`, `/api/saas-admin/whitelabel` | ✅ |
+| `auth` | JWT login/register, OTP flows, password reset, employee activation, user administration, roles | `/api/auth`, `/api/users` | ✅ `AuthServiceImplTest` |
+| `organization` | Organization CRUD, role lookup, org settings, accounting/statutory/payslip toggles, attendance capture key, plan-change request, termination, sandbox status/convert | `/api/organizations`, `/api/organization/settings`, `/api/organization/sandbox-status`, `/api/organization/sandbox/convert` | ✅ `OrganizationSettingsDefaultsTest` |
+| `sandbox` | Public sandbox signup, demo data, rate limiting, cleanup/read-only filters | `/api/public/sandbox` | ✅ sandbox integration/service/controller/rate-limit/filter tests |
+| `employee` | Employee CRUD, employee self lookup, CSV import preview/import, invitations, statutory profile (PAN/UAN/PF/TDS profile) | `/api/employees`, `/api/employees/{employeeId}/statutory-profile` | ✅ statutory profile coverage only (`EmployeeStatutoryProfileServiceImplTest`) |
+| `attendance` | Attendance records, bulk/device intake, dashboard/monthly reports, leave-status resolver, public capture lookup/intake | `/api/attendance`, `/api/public/attendance-capture` | ✅ resolver coverage (`AttendanceLeaveResolverTest`) |
+| `leave` | Leave types, balances, requests, approvals/rejections/cancel, calendar, holidays, public email actions | `/api/leave`, `/api/public/leave/requests` | ✅ scheduler coverage (`LeaveBalanceSchedulerTest`) |
+| `payroll` | Payroll run generation/search/detail/dashboard, approve/pay/cancel, salary calculators, PF/TDS statutory calculation wiring, payroll statutory audit rows | `/api/payroll` | ✅ statutory/wiring coverage (`PayrollServiceImplStatutoryWiringTest`, `PfCalculatorTest`, `TdsCalculatorTest`); legacy salary calculators still have limited direct coverage |
+| `payslip` | Generated payslip snapshots, template versions/defaults, secure share links, public token access, delivery orchestration | `/api/organization/payslips`, `/api/organization/payslip-templates`, `/api/public/payslips` | ✅ generation/template/share-link/notification/rate-limit tests |
+| `inventory` | Inventory items, stock movements, dashboard, bulk import | `/api/inventory` | ❌ |
+| `product` | Product CRUD, product BOM CRUD, production-product entry point | `/api/products` | ❌ |
+| `production` | Versioned workflows/BOMs, orders, modal execution flow, assignments, workstations, quality, materials, Kanban, analytics, notifications, audit trail, employee self-service progress | `/api/production`, `/api/production/notification-preferences` | ✅ broadest coverage (`ProductionServiceImplTest`, `ProductionPhase2ServiceImplTest`, output posting/progress auth/deadline/event tests) |
+| `vendor` | Third-party production vendor CRUD, active list, dashboard, insights | `/api/vendors` | ✅ `VendorServiceImplTest` |
+| `supplier` | Supplier CRUD, active list, dashboard, insights, bulk import | `/api/suppliers` | ❌ |
+| `customer` | Customer CRUD, active list, dashboard, insights, bulk import | `/api/customers` | ❌ |
+| `billing` | Bills, number suggestions/availability, posting/cancel/payment, GST suggestions/report, OCR extraction/templates, e-way action hooks | `/api/billing`, `/api/billing/ocr`, `/api/billing/ocr-templates` | ❌ |
+| `ewaybill` | E-way bill preview/sync/cancel/vehicle/update, billing e-way actions, provider credential management | `/api/eway-bills`, `/api/eway-bills/integration`, `/api/billing/bills/{billId}/eway/*` | ❌ |
+| `ai` | AI chat, local business insight drilldowns, listed-company benchmarks, action execution, usage ledger | `/api/ai` | ❌ |
+| `accounting` | Masters, tax sections, groups, ledgers, vouchers, GST summary, trial balance, P&L, balance sheet, aging | `/api/accounting` | ✅ report/voucher tests |
+| `feature` | Feature catalog, org feature overrides, effective org features, gate filter | `/api/saas-admin/features`, `/api/organizations/features` | ✅ admin/service/filter tests |
+| `saasadmin` | SaaS owner dashboard, factory paid/delete operations, pricing plans/add-ons, public plans/offers, marketing sends, insights | `/api/saas-admin`, `/api/saas-admin/pricing`, `/api/public/plans`, `/api/public/add-ons`, `/api/public/offers` | ✅ pricing catalog coverage |
+| `whitelabel` | Public domain/partner-code lookup, current-org branding, partner-managed branding, SaaS-owner branding/partner admin | `/api/public/whitelabel`, `/api/whitelabel/branding`, `/api/partner/whitelabel`, `/api/saas-admin/whitelabel` | ✅ public/current/partner/admin service tests |
 | `importexport` | Generic import/export job tracking | `/api/import-export/jobs` | ❌ |
-| `registration` | Early-registration/lead-capture questionnaire | `/api/public/early-registration` | ❌ |
-| `notification` | Email service + schedulers (digest, renewal reminders, sandbox cleanup) | — (background only) | ❌ |
-| `dashboard` | Org-level summary/trend dashboard | `/api/dashboard` | ✅ |
-| `common` | BaseEntity, pagination, API response wrapper, global exception handling | — | ✅ (BaseEntity only) |
-| `config` | Security, Swagger, cache configuration | — | — |
+| `registration` | Public early-registration questionnaire and approval endpoints | `/api/public/early-registration` | ❌ |
+| `notification` | Email service plus scheduled digests/renewals/sandbox/production notification plumbing | — background/service layer | ❌ |
+| `dashboard` | Org summary and trend dashboard | `/api/dashboard` | ✅ `DashboardServiceImplTest` |
+| `common` | Base entity, health ping, pagination, API response wrapper, exceptions, security helpers, utilities | `/api/ping` | ✅ `BaseEntityTest` |
+| `config` | Spring Security, Swagger/OpenAPI, cache and application configuration | — | ❌ |
 
-# Per-Feature Reference (Frontend)
+## Frontend feature directories
 
 | Feature dir | Purpose | Backend module it talks to | Notable status |
 |---|---|---|---|
-| `features/auth` | Login, signup, OTP, forgot-password, employee activation, partner-code field | `auth` | Working; partner-code field is recent |
-| `features/employees` | Employee CRUD, import, invitations, pagination | `employee` | Working |
-| `features/attendance` | Attendance dashboard, manual/bulk entry, monthly report, export, QR generation for capture station | `attendance` | Working; no offline support |
-| `features/leave` | Leave types/balances/requests/calendar | `leave` | Working; dense page |
-| `features/payroll` | Payroll runs, generate/approve/pay, payslips, insights | `payroll` | Working; financial actions untested |
-| `features/inventory` | Stock CRUD, movements, dashboard, bulk import/export | `inventory` | Working; "delete" is actually disable |
-| `features/products` | Product + BOM CRUD | `product` | Working |
-| `features/production` | Orders, workflows, BOM, workstations, assignments (internal worker or vendor), Jira-style drag-drop kanban (fixed/step-view toggle, no horizontal scroll), inline partial-completion, audit trail tab, employee "My Orders" view, analytics | `production` | Most complete feature; very large page, now split with `KanbanBoard.tsx`, `PartialCompletionForm.tsx`, `MyAssignmentsPage.tsx` |
-| `features/vendors` | Vendor CRUD, dashboard — mirrors `features/suppliers` | `vendor` | Working |
-| `features/suppliers` | Supplier CRUD, dashboard, AI insights | `supplier` | Working |
-| `features/customers` | Customer CRUD, dashboard, insights | `customer` | Working |
-| `features/billing` | Invoices, e-way bill actions, GST, OCR import | `billing`, `ewaybill` | Working; some endpoints may be dead/unwired |
-| `features/accounting` | Vouchers, ledgers, reports (trial balance, P&L, balance sheet, aging) | `accounting` | Working; most complex/dense page |
-| `features/ai` | Assistant chat, insights, benchmarks | `ai` | Experimental/heuristic |
-| `features/organization-settings` | Org settings, GST integration, access management, termination | `organization`, `feature` | Working |
-| `features/public-pricing` | Public homepage pricing cards | `saasadmin` (public pricing) | Working, DB-driven |
-| `features/saas-admin` | Factories, feature gating, insights, marketing, whitelabel admin, pricing catalog manager | `saasadmin`, `feature`, `whitelabel` | Working; broad admin surface |
-| `features/whitelabel` | SaaS/partner branding admin, runtime branding resolution | `whitelabel` | Working; recently hardened |
-| `features/dashboard` | Summary/trends/benchmarks | `dashboard` | Working |
-| `features/help-center`, `features/docs` | In-app help/documentation | — | Static content |
-| `features/import-export` | Generic import/export job UI, CSV utilities | `importexport` | Foundational |
-| Tally-mode pages (`features/*/tally/*`) | Alternate Tally-style UI per module | various | **Disabled by default** (`NEXT_PUBLIC_ENABLE_TALLY_UI=false`) |
+| `features/auth` | Login, signup, OTP, forgot-password, employee activation, partner-code path | `auth`, `organization`, `sandbox` | Working; no frontend tests |
+| `features/organization-settings` | Org settings, accounting toggles, PF/TDS toggles, payslip delivery/share-link settings (email/SMS/WhatsApp, expiry days, max views, password required), employee production self-progress toggle, attendance capture key, plan/termination actions | `organization`, `payroll`, `payslip`, `production` | Working; hosts the payslip templates panel |
+| `features/organization`, `features/access`, `features/organization-features` | Organization profile/access and effective feature-gate surfaces | `organization`, `feature` | Working/admin-oriented |
+| `features/employees` | Employee CRUD/import/export, invitations, edit drawer, statutory profile form | `employee`, `employee/statutory` | Working; statutory form covers PAN/UAN/PF/tax-regime declaration data |
+| `features/attendance` | Attendance dashboard/register/manual/bulk entry, monthly report/export, QR/capture-key management hooks | `attendance` | Working; no offline queue/service worker found |
+| `features/leave` | Leave types/balances/requests/calendar/holidays | `leave` | Working; dense page |
+| `features/payroll` | Payroll runs, generate/approve/pay/delete, details dialog, statutory deduction breakdown, HTML payslip preview, JPG/ZIP export, embedded "Share securely" panel | `payroll`, `payslip` | Working; no PDF rendering library and no frontend automated tests |
+| `features/payslip-templates` | Payslip template admin panel: list with status/version, create/edit form dialog, publish draft, start new draft version from a published template, set default, delete | `payslip` | Working; mounted inside the organization settings page |
+| `features/payslips` | Secure share-link creation panel ("Share securely", expiry/max-views/password options, one-time-reveal link + copy), public payslip viewer, payslip data/number-to-words helpers | `payslip` | Working; drives the unauthenticated `/payslip/[token]` route |
+| `features/inventory` | Stock CRUD, stock movements, dashboard, import/export, Tally-mode variant | `inventory` | Working; delete UI disables items rather than hard-deleting |
+| `features/products` | Product and product BOM management, production entry point, Tally-mode export view | `product` | Working |
+| `features/production` | Production orders first, workflows, BOM definitions, workstations, analytics, modal order execution/details, board/list Kanban, assignments, quality, materials, timeline, audit trail, employee My Assignments | `production`, `vendor`, `inventory`, `product`, `customer` | Mature; current UX uses modal-based record/advance flow rather than Start/Pause-centric controls |
+| `features/vendors` | Vendor CRUD/dashboard/insights | `vendor` | Working |
+| `features/suppliers` | Supplier CRUD/dashboard/insights/bulk import/export | `supplier` | Working |
+| `features/customers` | Customer CRUD/dashboard/insights/bulk import/export | `customer` | Working |
+| `features/billing` | Bills, invoice print, OCR import dialog, e-way bill actions, GST suggestions/report | `billing`, `ewaybill` | Working surface with external-provider-dependent OCR/e-way edges |
+| `features/gst-integration` | GST/e-way integration settings panel | `ewaybill`, `organization` | Working settings surface |
+| `features/accounting` | Masters, ledgers, vouchers, reports, aging, GST summary, Tally-mode variant | `accounting` | Working; very dense/complex page |
+| `features/ai` | Floating assistant, assistant page, insight drilldowns, export helper | `ai` | Experimental/heuristic |
+| `features/public-pricing` | Public homepage pricing cards | `saasadmin` public pricing | Working, DB-driven |
+| `features/saas-admin` | SaaS owner factories/dashboard/pricing/marketing/whitelabel/feature admin | `saasadmin`, `feature`, `whitelabel` | Working broad admin surface |
+| `features/whitelabel` | Current-org branding, partner branding, SaaS-owner white-label admin helpers/hooks/config | `whitelabel` | Working |
+| `features/dashboard` | Summary, trends, benchmarks/dashboard views | `dashboard`, `ai` | Working |
+| `features/import-export` | Generic job table/hooks/types/CSV utilities | `importexport` | Foundational |
+| `features/docs`, `features/help-center`, `features/legal` | In-app docs/help/legal content | static / mixed | Static content |
+| `features/*/tally/*` | Alternate Tally-style UI per module | various | Disabled by default through `NEXT_PUBLIC_ENABLE_TALLY_UI=false` |

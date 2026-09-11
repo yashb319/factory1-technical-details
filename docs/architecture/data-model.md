@@ -79,6 +79,11 @@ erDiagram
     EMPLOYEE ||--o{ ATTENDANCE_RECORD : "clocks"
     EMPLOYEE ||--o{ LEAVE_REQUEST : "requests"
     EMPLOYEE ||--o{ PAYROLL_RUN_LINE : "paid via"
+    EMPLOYEE ||--o| EMPLOYEE_STATUTORY_PROFILE : "has"
+    PAYROLL_RUN_LINE ||--o| PAYROLL_STATUTORY_CALCULATION : "audits PF/TDS"
+    PAYROLL_RUN_LINE ||--o| PAYSLIP : "snapshotted into"
+    PAYSLIP_TEMPLATE ||--o{ PAYSLIP : "renders"
+    PAYSLIP ||--o{ PAYSLIP_ACCESS_TOKEN : "shared by"
 
     PRODUCT ||--o{ BOM_LINE : "consumes"
     PRODUCTION_ORDER ||--o{ PRODUCTION_ORDER_STEP : "executes"
@@ -120,6 +125,96 @@ erDiagram
         text details "JSON/text metadata, event-specific"
     }
 
+    EMPLOYEE_STATUTORY_PROFILE {
+        uuid id PK
+        uuid organization_id
+        uuid employee_id FK
+        string pan_number
+        string uan
+        string pf_account_number
+        boolean pf_enabled
+        enum pf_calculation_type "STATUTORY_CEILING|ACTUAL_WAGES|CUSTOM"
+        enum tax_regime "OLD|NEW"
+        numeric previous_employer_income
+        numeric declared_deductions_total
+    }
+
+    TAX_RULE ||--o{ TAX_SLAB : "contains"
+    TAX_RULE ||--o{ TAX_REBATE_RULE : "contains"
+    TAX_RULE ||--o{ CESS_RULE : "contains"
+    TAX_RULE ||--o{ SURCHARGE_RULE : "contains"
+    TAX_RULE ||--o{ PAYROLL_STATUTORY_CALCULATION : "referenced by"
+    PF_RULE ||--o{ PAYROLL_STATUTORY_CALCULATION : "referenced by"
+
+    TAX_RULE {
+        uuid id PK
+        string financial_year
+        enum regime "OLD|NEW"
+        date effective_from
+        date effective_to
+        numeric standard_deduction_amount
+    }
+
+    PF_RULE {
+        uuid id PK
+        date effective_from
+        date effective_to
+        numeric wage_ceiling
+        numeric employee_rate
+        numeric employer_rate
+        numeric eps_rate
+        numeric edli_rate
+        numeric admin_charge_rate
+    }
+
+    PAYROLL_STATUTORY_CALCULATION {
+        uuid id PK
+        uuid payroll_item_id FK
+        uuid employee_id FK
+        numeric employee_pf
+        numeric voluntary_pf
+        numeric employer_pf
+        numeric current_month_tds
+        uuid tax_rule_id FK
+        uuid pf_rule_id FK
+        string calculation_version
+        text calculation_snapshot_json
+    }
+
+    PAYSLIP_TEMPLATE {
+        uuid id PK
+        uuid organization_id
+        uuid logical_template_id
+        int version
+        enum status "DRAFT|PUBLISHED|ARCHIVED"
+        boolean default_template
+        json template_data
+    }
+
+    PAYSLIP {
+        uuid id PK
+        uuid organization_id
+        uuid employee_id FK
+        uuid payroll_run_id FK
+        uuid payroll_item_id FK
+        uuid template_id FK
+        int template_version
+        int pay_period_month
+        int pay_period_year
+        text payslip_data_json
+    }
+
+    PAYSLIP_ACCESS_TOKEN {
+        uuid id PK
+        uuid payslip_id FK
+        string token_hash
+        timestamp expires_at
+        int max_views
+        int view_count
+        boolean password_required
+        timestamp revoked_at
+    }
+
     SAAS_PLAN ||--o{ SAAS_ADDON : "offered alongside"
     ORGANIZATION }o--|| SAAS_PLAN : "subscribes to"
 ```
@@ -139,7 +234,8 @@ erDiagram
 - **Flyway** governs every schema change; migrations are strictly append-only
   (never renumber/reuse a version — this caused a real deployment collision
   once, fixed by renaming `V63` → `V64`). As of writing, the schema is at
-  **V68** (production vendor outsourcing, deadlines, and audit trail).
+  **V71** (payroll statutory foundation in `V70`, payslip templates/delivery in
+  `V71`).
 - **`production_assignments` vendor-or-user XOR**: `assignee_user_id` and
   `vendor_id` are both nullable, enforced mutually exclusive by a DB check
   constraint (`ck_production_assignment_target`) plus service-level
@@ -150,6 +246,19 @@ erDiagram
   *outbox* (delivery status/retries/idempotency for emails), not an immutable
   business audit trail; conflating the two would have made audit history
   dependent on notification delivery state.
+- **Production progress is derived per step from execution rows** — the modal
+  execution flow records completed/rejected quantities with `/record`; `/complete`
+  can advance only after that step's execution rows account for the full planned
+  quantity. Order-level completed/rejected totals are updated only from final-step
+  accepted/rejected output.
+- **Payroll statutory calculations are audited per payroll item** —
+  `payroll_statutory_calculations` stores PF/TDS amounts, referenced rule rows,
+  a calculation version, and a JSON snapshot so a payslip can explain how the
+  statutory deductions were produced.
+- **Payslip links never store raw tokens** — `payslip_access_tokens` stores a
+  SHA-256 hash, expiry/max-view/password controls, and public access deliberately
+  returns the same generic 404 for unknown, expired, revoked, exhausted, or
+  password-failed links.
 - **Deadline breach scheduler bug found & fixed during implementation**: the
   original scheduler called its own `@Transactional` method via `forEach`,
   which bypasses the Spring AOP proxy and silently drops the transaction. Fixed

@@ -12,14 +12,16 @@ API base paths connecting them.
 | Attendance | `attendance` | `features/attendance` (management) + external capture app (device) | `/api/attendance/*`, `/api/public/attendance-capture/*` |
 | Leave | `leave` | `features/leave` | `/api/leave/*` |
 | Payroll | `payroll` | `features/payroll` | `/api/payroll/*` |
+| Employee statutory profiles | `employee.statutory` + `payroll.statutory` | `features/employees` statutory form, `features/payroll` statutory breakdown | `/api/employees/{employeeId}/statutory-profile`, `/api/payroll/*` |
+| Payslips | `payslip` | `features/payslips`, `features/payslip-templates`, plus the payroll payslip dialog | `/api/organization/payslips`, `/api/organization/payslip-templates`, `/api/public/payslips/{token}` |
 | Inventory | `inventory` | `features/inventory` | `/api/inventory/*` |
 | Products / BOM | `product` | `features/products` | `/api/products/*` |
-| Production tracking (kanban, vendors, deadlines, audit trail) | `production` (+ new `vendor` package) | `features/production`, `features/vendors` | `/api/production/*` (phase 1 + phase 2), `/api/production/orders/{id}/audit-log`, `/api/production/my-assignments`, `/api/vendors/*` |
+| Production tracking (modal execution, kanban, vendors, deadlines, audit trail) | `production` (+ `vendor` package) | `features/production`, `features/vendors` | `/api/production/*`, `/api/production/orders/{id}/audit-log`, `/api/production/my-assignments`, `/api/vendors/*` |
 | Suppliers | `supplier` | `features/suppliers` | `/api/suppliers/*` |
 | Customers | `customer` | `features/customers` | `/api/customers/*` |
 | Billing / invoicing / OCR | `billing` | `features/billing` | `/api/billing/*` |
 | Accounting / GST reports | `accounting` | `features/accounting` | `/api/accounting/*` |
-| E-way bill integration | `ewaybill` | (within `features/billing`) | `/api/ewaybill/*` (disabled by default) |
+| E-way bill integration | `ewaybill` | `features/billing`, `features/gst-integration` | `/api/eway-bills/*`, `/api/eway-bills/integration/*`, `/api/billing/bills/{billId}/eway/*` (provider disabled by default) |
 | AI assistant | `ai` | `features/ai` | `/api/ai/*` |
 | Feature gating | `feature` | `featureGating.ts`, saas-admin feature-gate page | `/api/saas-admin/features`, `/api/organizations/features` |
 | SaaS pricing catalog | `saasadmin` (`SaasPricingAdminController`, `PublicPricingController`) | `features/public-pricing`, `features/saas-admin` | `/api/saas-admin/pricing`, `/api/public/plans`, `/api/public/add-ons`, `/api/public/offers` |
@@ -41,10 +43,22 @@ API base paths connecting them.
 | Tally UI mode flag | `src/config/features.ts` (`NEXT_PUBLIC_ENABLE_TALLY_UI`, default `false`) |
 | App shell (nav, mode switch, feature gates) | `src/components/layout/AppShell.tsx` |
 
+## Payslip surface map
+
+The `payslip` backend package is matched by frontend surfaces on both the
+authenticated and public sides:
+
+| Surface | Frontend | Backend |
+|---|---|---|
+| Template administration | `features/payslip-templates` (`PayslipTemplatesPanel`, `PayslipTemplateFormDialog`), mounted in the organization settings page | `/api/organization/payslip-templates` (+ `/publish`, `/new-draft-version`, `/set-default`) |
+| Delivery & link policy | `features/organization-settings` (email/SMS/WhatsApp toggles, share-link enable, expiry days, max views, password required) | `/api/organization/settings` |
+| Secure sharing | `features/payslips` `ShareLinkPanel` ("Share securely"), rendered in the payroll payslip dialog | `POST /api/organization/payslips/{id}/share-link` |
+| Public viewing | `src/app/payslip/[token]/page.tsx` → `features/payslips` `PublicPayslipViewer` | `POST /api/public/payslips/{token}` |
+
 ## Security boundary summary (backend)
 
 Defined centrally in `SecurityConfig`:
-- `/api/public/**` — no auth (signup, OTP, public pricing, public whitelabel lookup, sandbox signup, attendance-capture public intake)
+- `/api/public/**` — no auth (signup, OTP, public pricing, public whitelabel lookup, sandbox signup, attendance-capture public intake, public payslip token access)
 - `/api/partner/**` — `PARTNER_ADMIN` only; excluded from `OrganizationApprovalFilter` and `FeatureGateFilter`
 - `/api/saas-admin/**` — `SAAS_OWNER` only
 - everything else — authenticated, role-checked per endpoint (`@PreAuthorize`), and gated by `OrganizationApprovalFilter` (blocks `PENDING_APPROVAL` orgs) + `FeatureGateFilter` (blocks orgs without the relevant plan feature)
