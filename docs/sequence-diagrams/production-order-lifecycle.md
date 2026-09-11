@@ -1,57 +1,125 @@
-# Sequence: Production Order Lifecycle & Automatic Inventory Posting
+# Sequence: Production Order Modal Execution Lifecycle
 
-The most mature domain module. Covers workflow definition, order execution
-step-by-step, and the automatic stock posting that happens when a final step's
-output is accepted.
+This reflects the current production-order UX and backend lifecycle: the primary
+workspace is ordered as **Production orders → Workflow templates → BOM
+definitions → Workstations → Analytics**. Selecting an order opens a large modal
+with **Execution**, **Assignments**, **Quality**, **Materials**, **Timeline**, and
+**Audit trail** sections.
+
+The current execution model is record-first. Users no longer need visible
+Start/Pause controls to make normal progress: the first `/record` call implicitly
+starts the step when needed, `/record` only accumulates completed/rejected
+quantities for that step, and `/complete` advances only once that step has
+processed the order's planned quantity.
 
 > See also [`production-kanban-vendor-overhaul.md`](production-kanban-vendor-overhaul.md)
-> for the vendor outsourcing, per-step deadlines, audit trail, drag-and-drop
-> kanban board, and employee self-service layer built on top of this lifecycle.
+> for vendor/internal assignment, deadlines, employee self-service, and Kanban
+> board behavior built around this lifecycle.
+
+## Modal-based execution and step advancement
 
 ```mermaid
 sequenceDiagram
-    actor M as Management/Admin
-    participant FE as Frontend (ProductionPage)
-    participant API as Backend ProductionController /<br/>ProductionPhase2Controller
-    participant SVC as ProductionServiceImpl /<br/>ProductionPhase2ServiceImpl
+    actor U as Management/Admin
+    participant FE as Frontend<br/>ProductionPage + modal
+    participant API as ProductionController
+    participant SVC as ProductionServiceImpl
     participant POST as ProductionOutputPostingService
     participant DB as PostgreSQL
 
-    M->>FE: define workflow (steps, stations) + BOM + publish
-    FE->>API: POST /api/production/workflows, /boms (draft -> publish)
-    API->>DB: INSERT production_workflows, bom_lines
+    U->>FE: Open Production orders tab
+    FE->>API: GET /api/production/orders<br/>GET /api/production/kanban
+    API-->>FE: orders + board items<br/>(hasActiveAssignment included)
+    FE->>FE: Render board/list full-width
 
-    M->>FE: create a production order against a published workflow
-    FE->>API: POST /api/production/orders
-    API->>DB: INSERT production_orders (planned_quantity, current_step)
+    U->>FE: Click order card/row
+    FE->>API: GET /api/production/orders/{orderId}
+    FE->>API: GET /api/production/orders/{orderId}/assignments
+    FE->>API: GET /api/production/orders/{orderId}/execution-batches
+    FE->>API: GET /api/production/orders/{orderId}/timeline
+    FE->>API: GET /api/production/orders/{orderId}/audit-log
+    API-->>FE: detail payloads
+    FE->>FE: Open large modal with Execution,<br/>Assignments, Quality, Materials,<br/>Timeline, Audit trail
 
-    loop For each workflow step
-        M->>FE: start step / assign workstation
-        FE->>API: PUT /api/production/orders/{id}/steps/{stepId}/start
-        M->>FE: record partial output (accepted/rejected quantities)
-        FE->>API: PUT .../steps/{stepId}/complete {accepted, rejected}
-        API->>SVC: only advance current_step when<br/>cumulative(accepted+rejected) reaches planned_quantity<br/>(fixed bug: previously advanced prematurely)
-        SVC->>DB: UPDATE production_order_steps, production_order_step_snapshots
+    U->>FE: Enter completed/rejected quantity for current step
+    FE->>API: POST /api/production/orders/{orderId}/steps/{stepId}/record<br/>{completedQuantity, rejectedQuantity, expected versions}
+    API->>SVC: recordProduction(orderId, stepId, request)
+    SVC->>DB: Sum this step's prior execution rows
+    SVC->>SVC: Reject if step processed + new quantity > planned quantity
+    alt step was not already STARTED
+        SVC->>DB: INSERT production_step_executions(action=STARTED)
     end
+    SVC->>DB: INSERT production_step_executions(action=COMPLETED,<br/>completedQuantity, rejectedQuantity)
+    SVC->>DB: INSERT production_order_audit_log(eventType=PARTIAL_COMPLETE,<br/>recordOnly=true)
+    SVC->>DB: Set order status IN_PROGRESS
+    API-->>FE: updated order
+    FE->>FE: Refresh modal quantities and board card
 
-    Note over SVC,POST: When the FINAL step's output is accepted
-    SVC->>POST: postInventoryForAcceptedOutput(orderId, accepted)
-    POST->>DB: check production_inventory_postings for<br/>existing (organization_id, source_type, source_id)<br/>-> idempotency guard against double-posting
-    alt not already posted
-        POST->>POST: for each BOM line:<br/>consumed = accepted * quantityPerUnit * (1 + wastePct/100)<br/>(BigDecimal scale 3, HALF_UP)
-        POST->>DB: decrementStockIfAvailable(rawMaterialId, consumed)<br/>-- atomic conditional UPDATE, 0 rows affected = insufficient stock
-        alt any raw material insufficient
-            POST->>POST: throw -> whole posting rolled back
-            POST-->>SVC: error, order step NOT marked complete
-        else all sufficient
-            POST->>DB: incrementStock(finishedGoodId, accepted)
-            POST->>DB: INSERT production_inventory_postings (ledger row)
-            POST-->>SVC: success
+    U->>FE: Click Move to next step / Complete step
+    FE->>API: POST /api/production/orders/{orderId}/steps/{stepId}/complete
+    API->>SVC: completeStep(orderId, stepId, request)
+    SVC->>DB: Sum this step's execution rows only
+    alt completed + rejected < order planned quantity
+        SVC-->>API: 400 Current step quantity is not fully recorded
+        API-->>FE: show gate message
+    else step fully accounted for
+        alt next active step exists
+            SVC->>DB: production_orders.current_step_id = next step
+            SVC->>DB: status = IN_PROGRESS
+        else final step
+            SVC->>DB: current_step_id = null
+            alt rejected quantity is zero
+                SVC->>DB: status = COMPLETED
+            else rejected output exists
+                SVC->>DB: status = PARTIALLY_COMPLETED
+            end
         end
-    else already posted
-        POST-->>SVC: no-op (idempotent replay)
+        SVC->>DB: INSERT production_order_audit_log(eventType=STEP_COMPLETED)
+        API-->>FE: updated order
     end
-
-    API-->>FE: updated order/step state
-    FE->>FE: kanban board, timeline, and analytics update
 ```
+
+## Final-step inventory posting
+
+```mermaid
+sequenceDiagram
+    participant SVC as ProductionServiceImpl
+    participant POST as ProductionOutputPostingService
+    participant DB as PostgreSQL
+
+    Note over SVC: Only final-step accepted output<br/>becomes finished stock.
+    SVC->>POST: postFinalStepOutput(order, step, completed,<br/>sourceType=STEP_EXECUTION, sourceId=executionId)
+    POST->>DB: Check production_inventory_postings unique<br/>(organization_id, source_type, source_id)
+    alt already posted
+        POST-->>SVC: no-op idempotent replay
+    else not posted
+        POST->>DB: Read published BOM lines for order product
+        POST->>DB: Atomically decrement raw-material stock<br/>using BOM quantity + waste percentage
+        alt any material insufficient
+            POST-->>SVC: throw; transaction rolls back
+        else all material available
+            POST->>DB: Increment finished-good stock by accepted quantity
+            POST->>DB: INSERT production_inventory_postings ledger row
+            POST-->>SVC: posted
+        end
+    end
+```
+
+## Kanban placement rule
+
+```mermaid
+flowchart LR
+    A[Kanban item] --> B{Status}
+    B -->|COMPLETED or CANCELLED| D[Done]
+    B -->|PLANNED or RELEASED| C{hasActiveAssignment?}
+    C -->|true| E[In Progress]
+    C -->|false| F[To Do]
+    B -->|IN_PROGRESS / ON_HOLD / PARTIALLY_COMPLETED| E
+```
+
+The important backend correction behind the UX is that progress is now derived
+from execution rows for the **specific step being viewed or advanced**. The old
+order-level-only accumulation was too coarse: it could make a later modal action
+look complete because the order had output elsewhere, even when the current
+step's own completed + rejected rows did not yet account for the planned
+quantity.
